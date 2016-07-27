@@ -71,6 +71,9 @@ var_attributes = {'time': {'long_name':'time since the beginning of the simulati
 var_attributes['lon'] = var_attributes['longitude']
 var_attributes['lat'] = var_attributes['latitude']
 
+## variables used to support the stucture of the file, rather than data
+## used to remove them from the list of available data variables
+SPECIAL_VARIABLES = ['time','particle_count']
 
 class Writer(object):
     def __init__ (self, filename,
@@ -179,7 +182,7 @@ class Writer(object):
 
 class Reader(object):
     """
-    class to handle reading a nc_particle file
+    Class to handle reading a nc_particle file
 
     (such as those written by GNOME or the Writer class above)
     """
@@ -188,12 +191,14 @@ class Reader(object):
         initialize a file reader.
 
         :param nc_file: the netcdf file to read. If a netCDF4 Dataset, it will be used,
-                        if a string a new netCDF Dataset will be opened.
-        :type nc_file: string or netCDF4 Dataset:
+                        if a string, a new netCDF Dataset will be opened for reading
+                        using that filename
+        :type nc_file: string or netCDF4 Dataset object
+
         """
 
         if type(nc_file) == netCDF4.Dataset:
-            # already open -- jsut use it
+            # already open -- just use it
             self.nc = nc_file
         else:
             # open a new one
@@ -201,20 +206,21 @@ class Reader(object):
 
         time = self.nc.variables['time']
         units = time.getncattr('units')
-        self.times = netCDF4.num2date(time, units)
+        self.times = netCDF4.num2date(time[:], units)
         self.time_units = units
-        
-        # #Defined mass in the same way as done above for time.
-        ## note -- there may not be a mass variable...
-        # mass = self.nc.variables['mass']
-        # units_mass = mass.getncattr('units')
-        # self.mass = mass
-        # self.mass_units = units_mass
-        
+                
         self.particle_count = self.nc.variables['particle_count']
         # build the index:
         self.data_index = np.zeros((len(self.times)+1,), dtype=np.int32 )
         self.data_index[1:] = np.cumsum(self.particle_count)
+
+    @property
+    def variables(self):
+        """
+        return the names of all the variables associated with the particles
+        """
+        return [ var for var in self.nc.variables.keys() if var not in SPECIAL_VARIABLES]
+
 
     def get_all_timesteps(self, variables=['latitude','longitude']):
          """
@@ -238,7 +244,12 @@ class Reader(object):
                 ind2 = self.data_index[i+1]
                 data[var].append( self.nc.variables[var][ind1:ind2] )      
          return data
-    
+   
+    def get_timestep_single_var(self, timestep, variable):
+        ind1 = self.data_index[timestep]
+        ind2 = self.data_index[timestep+1]
+        return self.nc.variables[variable][ind1:ind2]
+   
     def get_units(self, variable):
         """
         return the units of the given variable
@@ -247,7 +258,6 @@ class Reader(object):
         :type variable: string
         """
         return self.nc.variables[variable].units
-
 
     def get_timestep(self, timestep, variables=['latitude','longitude']):
         """
@@ -262,12 +272,8 @@ class Reader(object):
                        variable names, and the values are numpy arrays
                        of the data.
         """
-        data = {}
-        for var in variables:
-            ind1 = self.data_index[timestep]
-            ind2 = self.data_index[timestep+1]
-            data[var] = self.nc.variables[var][ind1:ind2]      
-        return data
+        ind1, ind2 = self.data_index[timestep:timestep+2]
+        return {var:self.nc.variables[var][ind1:ind2] for var in variables}
         
     def get_individual_trajectory(self, particle_id, variables=['latitude','longitude']):
         """
@@ -280,7 +286,9 @@ class Reader(object):
         for var in variables:
             data[var] = self.nc.variables[var][indexes]      
         return data
-
+    
+    def close(self):
+        self.nc.close()
         
         
     
