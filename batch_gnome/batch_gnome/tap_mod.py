@@ -725,7 +725,7 @@ def CompThicknessCube(FileList, OutputTimes, Grid, Weather=None):
     for SpillNum in range(NumSpills):
         #print "computing spill number %i"%(SpillNum,)
         # read new trajectory file:
-        #print "working with file:", FileList[SpillNum]
+        print "working with file:", FileList[SpillNum]
         #DDR traj_file = nc_particles.nc_particle_file(FileList[SpillNum])
         traj_file = nc_particles.Reader(FileList[SpillNum])
 
